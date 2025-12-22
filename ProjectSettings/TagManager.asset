@@ -14,7 +14,7 @@ TagManager:
   - UI
   - Ground
   - Enemy
-  - 
+  - Player
   - 
   - 
   - 
@@ -44,6 +44,9 @@ TagManager:
     locked: 0
   - name: Default
     uniqueID: 0
+    locked: 0
+  - name: Effect
+    uniqueID: 3195117381
     locked: 0
   m_RenderingLayers:
   - Default

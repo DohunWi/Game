@@ -32,7 +32,7 @@ public class SoundManager : MonoBehaviour
 
         bgmSource.clip = clip;
         bgmSource.loop = true; // 무한 반복
-        bgmSource.volume = masterVolume;
+        bgmSource.volume = 0.5f;
         bgmSource.Play();
     }
 
