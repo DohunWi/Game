@@ -24,14 +24,19 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private Vector2 groundCheckSize = new Vector2(0.5f, 0.2f);
 
     [Header("Combat")]
-    [SerializeField] private GameObject attackVFX;
+    [SerializeField] private GameObject[] attackVFXs; // 1타, 2타, 3타 이펙트
     [SerializeField] private float attackDuration = 0.2f;
     [SerializeField] private Transform attackPoint;
     [SerializeField] private float attackRange = 0.5f;
     [SerializeField] private LayerMask enemyLayer;
 
+    [Header("Combo Settings")]
+    [SerializeField] private float comboResetTime = 1.0f; // 이 시간 안에 다음 공격해야 콤보 유지
+    private int comboStep = 0; // 현재 콤보 단계 (0, 1, 2...)
+    private float lastAttackTime; // 마지막 공격이 끝난 시간
+
     [Header("Audio")]
-    [SerializeField] private AudioClip attackSound;
+    [SerializeField] private AudioClip[] attackSounds;
     [SerializeField] private AudioClip jumpSound;
     [SerializeField] private AudioClip dashSound;
     [SerializeField] private AudioClip[] footstepSounds; // 배열로 만들어서 랜덤 재생
@@ -240,6 +245,13 @@ public class PlayerController : MonoBehaviour
     {
         if (value.isPressed && !isAttacking && !isDashing && !isHit)
         {
+            // 1. 콤보 유지 시간 체크
+            // (마지막 공격 끝난 후 1초가 지났으면 콤보 초기화)
+            if (Time.time - lastAttackTime > comboResetTime)
+            {
+                comboStep = 0;
+            }
+
             StartCoroutine(AttackRoutine());
         }
     }
@@ -249,17 +261,25 @@ public class PlayerController : MonoBehaviour
     private IEnumerator AttackRoutine()
     {
         isAttacking = true;
+        
+        // --- 1. 콤보 단계에 맞는 리소스 선택 ---
+        // 배열 크기를 벗어나지 않게 안전장치 (나머지 연산 %)
+        // 예: 이펙트가 3개인데 4타째가 되면 다시 0번으로
+        int stepIndex = comboStep % attackVFXs.Length;
 
-        // [수정] 몸체 애니메이션은 HandleAnimations가 Idle로 처리하므로 
-        // 여기서 SetTrigger를 할 필요가 없습니다. (오히려 충돌 남)
+        // --- 2. 소리 재생 ---
+        if (SoundManager.Instance != null && attackSounds.Length > 0) 
+        {
+            // 배열 인덱스 보호 (소리가 이펙트보다 적을 수도 있으니)
+            int soundIndex = comboStep % attackSounds.Length;
+            SoundManager.Instance.PlaySFX(attackSounds[soundIndex]);
+        }
 
-        if (SoundManager.Instance != null) 
-            SoundManager.Instance.PlaySFX(attackSound);
+        // --- 3. VFX 켜기 ---
+        GameObject currentVFX = attackVFXs[stepIndex];
+        if (currentVFX != null) currentVFX.SetActive(true);
 
-        // VFX 켜기
-        if (attackVFX != null) attackVFX.SetActive(true);
-
-        // 타격 판정
+        // --- 4. 데미지 판정 (콤보마다 데미지 증가 가능!) ---
         Collider2D[] hitEnemies = Physics2D.OverlapCircleAll(attackPoint.position, attackRange);
         foreach (Collider2D enemyCollider in hitEnemies)
         {
@@ -268,15 +288,27 @@ public class PlayerController : MonoBehaviour
                 EnemyAI enemyAI = enemyCollider.GetComponent<EnemyAI>();
                 if (enemyAI != null)
                 {
-                    enemyAI.TakeDamage(1, transform); 
+                    // [팁] 3타(마지막) 공격은 데미지를 2배로 줄까요?
+                    int damage = 1;
+                    if (stepIndex == 2) damage = 2; // 3번째 공격은 2데미지!
+
+                    enemyAI.TakeDamage(damage, transform); 
                 }
             }
         }
 
+        // --- 5. 대기 ---
         yield return new WaitForSeconds(attackDuration);
 
-        if (attackVFX != null) attackVFX.SetActive(false);
+        // --- 6. 정리 ---
+        if (currentVFX != null) currentVFX.SetActive(false);
+        
         isAttacking = false;
+        
+        // [중요] 콤보 다음 단계로 증가
+        comboStep++;
+        // 마지막 공격 끝난 시간 기록 (이 시간부터 1초 카운트 시작)
+        lastAttackTime = Time.time; 
     }
 
     private IEnumerator DashRoutine()
